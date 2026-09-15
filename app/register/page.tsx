@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  CheckCircle2,
   FileImage,
   FileText,
   GraduationCap,
@@ -159,6 +160,20 @@ export default function RegisterPage() {
   const [identityDocument, setIdentityDocument] =
     useState<File | null>(null);
 
+  /*
+   * Upload status is only used to show the student
+   * whether each selected file was actually uploaded.
+   */
+  const [studentPhotoUploadStatus, setStudentPhotoUploadStatus] =
+    useState<
+      "idle" | "uploading" | "success" | "error"
+    >("idle");
+
+  const [identityDocumentUploadStatus, setIdentityDocumentUploadStatus] =
+    useState<
+      "idle" | "uploading" | "success" | "error"
+    >("idle");
+
   const [error, setError] = useState("");
 
   const [loadingStatus, setLoadingStatus] =
@@ -174,78 +189,78 @@ export default function RegisterPage() {
     useState(false);
 
   useEffect(() => {
-  async function checkRegistrationStatus() {
-    setLoadingStatus(true);
+    async function checkRegistrationStatus() {
+      setLoadingStatus(true);
 
-    const timeoutPromise = new Promise<never>(
-      (_, reject) => {
-        setTimeout(() => {
-          reject(
-            new Error(
-              "Registration status check timed out.",
+      const timeoutPromise = new Promise<never>(
+        (_, reject) => {
+          setTimeout(() => {
+            reject(
+              new Error(
+                "Registration status check timed out.",
+              ),
+            );
+          }, 8000);
+        },
+      );
+
+      try {
+        const { data, error: statusError } =
+          await Promise.race([
+            supabase.rpc(
+              "get_internship_registration_status",
             ),
-          );
-        }, 8000);
-      },
-    );
+            timeoutPromise,
+          ]);
 
-    try {
-      const { data, error: statusError } =
-        await Promise.race([
-          supabase.rpc(
-            "get_internship_registration_status",
-          ),
-          timeoutPromise,
-        ]);
+        if (statusError) {
+          console.error(statusError);
 
-      if (statusError) {
-        console.error(statusError);
+          /*
+           * If the status check fails, the page remains
+           * usable. The final registration RPC performs
+           * the real security check.
+           */
+          setRegistrationOpen(true);
+          setLoadingStatus(false);
+          return;
+        }
+
+        const statusRow = Array.isArray(data)
+          ? data[0]
+          : data;
+
+        const isOpen =
+          statusRow?.registration_open !== false;
+
+        setRegistrationOpen(isOpen);
+
+        setRegistrationClosesAt(
+          statusRow?.registration_closes_at ?? null,
+        );
+
+        setLoadingStatus(false);
+      } catch (statusCheckError) {
+        console.error(
+          "Registration status check failed:",
+          statusCheckError,
+        );
 
         /*
-         * If the status check fails, the page remains
-         * usable. The final registration RPC performs
-         * the real security check.
+         * If Supabase does not respond within 8 seconds,
+         * allow the page to continue instead of leaving
+         * the user stuck on the loading screen.
+         *
+         * The final registration RPC remains the
+         * authoritative security check.
          */
         setRegistrationOpen(true);
         setLoadingStatus(false);
-        return;
       }
-
-      const statusRow = Array.isArray(data)
-        ? data[0]
-        : data;
-
-      const isOpen =
-        statusRow?.registration_open !== false;
-
-      setRegistrationOpen(isOpen);
-
-      setRegistrationClosesAt(
-        statusRow?.registration_closes_at ?? null,
-      );
-
-      setLoadingStatus(false);
-    } catch (statusCheckError) {
-      console.error(
-        "Registration status check failed:",
-        statusCheckError,
-      );
-
-      /*
-       * If Supabase does not respond within 8 seconds,
-       * allow the page to continue instead of leaving
-       * the user stuck on the loading screen.
-       *
-       * The final registration RPC remains the
-       * authoritative security check.
-       */
-      setRegistrationOpen(true);
-      setLoadingStatus(false);
     }
-  }
 
-  checkRegistrationStatus();
-}, []);
+    checkRegistrationStatus();
+  }, []);
 
   function updateField(
     field: keyof StudentFormData,
@@ -318,6 +333,7 @@ export default function RegisterPage() {
      * document type changes.
      */
     setIdentityDocument(null);
+    setIdentityDocumentUploadStatus("idle");
     setError("");
   }
 
@@ -363,6 +379,7 @@ export default function RegisterPage() {
 
     if (!file) {
       setStudentPhoto(null);
+      setStudentPhotoUploadStatus("idle");
       return;
     }
 
@@ -374,10 +391,12 @@ export default function RegisterPage() {
     ) {
       event.target.value = "";
       setStudentPhoto(null);
+      setStudentPhotoUploadStatus("idle");
       return;
     }
 
     setStudentPhoto(file);
+    setStudentPhotoUploadStatus("idle");
   }
 
   function handleIdentityDocumentChange(
@@ -390,6 +409,7 @@ export default function RegisterPage() {
 
     if (!file) {
       setIdentityDocument(null);
+      setIdentityDocumentUploadStatus("idle");
       return;
     }
 
@@ -407,10 +427,12 @@ export default function RegisterPage() {
     ) {
       event.target.value = "";
       setIdentityDocument(null);
+      setIdentityDocumentUploadStatus("idle");
       return;
     }
 
     setIdentityDocument(file);
+    setIdentityDocumentUploadStatus("idle");
   }
 
   async function uploadFile(
@@ -725,6 +747,10 @@ export default function RegisterPage() {
        * The upload function automatically retries
        * temporary network / transport failures.
        */
+      setStudentPhotoUploadStatus(
+        "uploading",
+      );
+
       const studentPhotoUrl =
         await uploadFile(
           studentPhoto,
@@ -733,18 +759,38 @@ export default function RegisterPage() {
         );
 
       /*
+       * Student photo has now been successfully
+       * uploaded to Supabase Storage.
+       */
+      setStudentPhotoUploadStatus(
+        "success",
+      );
+
+      /*
        * Upload National ID / Passport.
        *
        * This is a separate upload, so if this one
        * encounters a temporary failure, only this
        * file is retried.
        */
+      setIdentityDocumentUploadStatus(
+        "uploading",
+      );
+
       const identityDocumentUrl =
         await uploadFile(
           identityDocument,
           "identity-documents",
           "students",
         );
+
+      /*
+       * Identity document has now been successfully
+       * uploaded to Supabase Storage.
+       */
+      setIdentityDocumentUploadStatus(
+        "success",
+      );
 
       /*
        * Store the complete form temporarily.
@@ -803,6 +849,28 @@ export default function RegisterPage() {
       console.error(
         uploadError,
       );
+
+      /*
+       * Show the correct upload state if one
+       * of the uploads fails.
+       */
+      if (
+        studentPhotoUploadStatus ===
+        "uploading"
+      ) {
+        setStudentPhotoUploadStatus(
+          "error",
+        );
+      }
+
+      if (
+        identityDocumentUploadStatus ===
+        "uploading"
+      ) {
+        setIdentityDocumentUploadStatus(
+          "error",
+        );
+      }
 
       const message =
         uploadError instanceof Error
@@ -1414,6 +1482,37 @@ export default function RegisterPage() {
                         className="hidden"
                       />
                     </label>
+
+                    {studentPhotoUploadStatus ===
+                      "uploading" && (
+                      <div className="mt-4 flex items-center gap-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 text-sm text-cyan-300">
+                        <Loader2
+                          size={17}
+                          className="animate-spin"
+                        />
+                        Uploading student photo...
+                      </div>
+                    )}
+
+                    {studentPhotoUploadStatus ===
+                      "success" && (
+                      <div className="mt-4 flex items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm text-green-400">
+                        <CheckCircle2
+                          size={17}
+                        />
+                        Student photo uploaded successfully
+                      </div>
+                    )}
+
+                    {studentPhotoUploadStatus ===
+                      "error" && (
+                      <div className="mt-4 flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+                        <FileImage
+                          size={17}
+                        />
+                        Student photo upload failed
+                      </div>
+                    )}
                   </div>
 
                   {/* Identity Document */}
@@ -1471,6 +1570,50 @@ export default function RegisterPage() {
                         className="hidden"
                       />
                     </label>
+
+                    {identityDocumentUploadStatus ===
+                      "uploading" && (
+                      <div className="mt-4 flex items-center gap-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 text-sm text-cyan-300">
+                        <Loader2
+                          size={17}
+                          className="animate-spin"
+                        />
+                        Uploading{" "}
+                        {formData.nationalityType ===
+                        "Other"
+                          ? "passport document"
+                          : "National ID document"}
+                        ...
+                      </div>
+                    )}
+
+                    {identityDocumentUploadStatus ===
+                      "success" && (
+                      <div className="mt-4 flex items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm text-green-400">
+                        <CheckCircle2
+                          size={17}
+                        />
+                        {formData.nationalityType ===
+                        "Other"
+                          ? "Passport document"
+                          : "National ID document"}{" "}
+                        uploaded successfully
+                      </div>
+                    )}
+
+                    {identityDocumentUploadStatus ===
+                      "error" && (
+                      <div className="mt-4 flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+                        <FileText
+                          size={17}
+                        />
+                        {formData.nationalityType ===
+                        "Other"
+                          ? "Passport document"
+                          : "National ID document"}{" "}
+                        upload failed
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
