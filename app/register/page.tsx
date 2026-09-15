@@ -1337,101 +1337,147 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Nationality */}
-              <div className="border-t border-slate-800 pt-6">
-                <div className="mb-4">
-                  <h2 className="text-lg font-bold text-white">
-                    Nationality
-                  </h2>
+           {/* Nationality */}
+<div className="border-t border-slate-800 pt-6">
+  <div className="mb-4">
+    <h2 className="text-lg font-bold text-white">
+      Nationality
+    </h2>
 
-                  <p className="mt-1 text-sm text-slate-500">
-                    Select your nationality.
-                  </p>
-                </div>
+    <p className="mt-1 text-sm text-slate-500">
+      Select your nationality.
+    </p>
+  </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {/* Egyptian */}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleNationalityTypeChange(
-                        "Egyptian",
-                      )
-                    }
-                    className={`rounded-2xl border p-4 text-left transition ${
-                      formData.nationalityType ===
-                      "Egyptian"
-                        ? "border-cyan-500 bg-cyan-500/10 ring-2 ring-cyan-500/10"
-                        : "border-slate-800 bg-black hover:border-slate-600"
-                    }`}
-                  >
-                    <p className="font-bold text-white">
-                      Egyptian
-                    </p>
+  <div className="grid gap-4 sm:grid-cols-2">
+    {/* Egyptian */}
+    <label
+      htmlFor="nationality-egyptian"
+      className={`block cursor-pointer rounded-2xl border p-4 text-left transition ${
+        formData.nationalityType === "Egyptian"
+          ? "border-cyan-500 bg-cyan-500/10 ring-2 ring-cyan-500/10"
+          : "border-slate-800 bg-black hover:border-slate-600"
+      }`}
+    >
+      <input
+        id="nationality-egyptian"
+        name="nationalityType"
+        type="radio"
+        value="Egyptian"
+        checked={
+          formData.nationalityType === "Egyptian"
+        }
+        onChange={() =>
+          handleNationalityTypeChange("Egyptian")
+        }
+        className="sr-only"
+      />
 
-                    <p className="mt-1 text-xs text-slate-500">
-                      National ID required
-                    </p>
-                  </button>
+      <div className="flex items-start gap-3">
+        <div
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+            formData.nationalityType === "Egyptian"
+              ? "border-cyan-400"
+              : "border-slate-600"
+          }`}
+        >
+          {formData.nationalityType === "Egyptian" && (
+            <div className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
+          )}
+        </div>
 
-                  {/* Foreign */}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleNationalityTypeChange(
-                        "Other",
-                      )
-                    }
-                    className={`rounded-2xl border p-4 text-left transition ${
-                      formData.nationalityType ===
-                      "Other"
-                        ? "border-cyan-500 bg-cyan-500/10 ring-2 ring-cyan-500/10"
-                        : "border-slate-800 bg-black hover:border-slate-600"
-                    }`}
-                  >
-                    <p className="font-bold text-white">
-                      Foreign
-                    </p>
+        <div>
+          <p className="font-bold text-white">
+            Egyptian
+          </p>
 
-                    <p className="mt-1 text-xs text-slate-500">
-                      Passport required
-                    </p>
-                  </button>
-                </div>
+          <p className="mt-1 text-xs text-slate-500">
+            National ID required
+          </p>
+        </div>
+      </div>
+    </label>
 
-                {/* Foreign nationality */}
-                {formData.nationalityType ===
-                  "Other" && (
-                  <div className="mt-5">
-                    <label
-                      htmlFor="nationality"
-                      className="mb-2 block text-sm font-semibold text-slate-200"
-                    >
-                      Your Nationality
-                      <span className="ml-1 text-red-500">
-                        *
-                      </span>
-                    </label>
+    {/* Foreign */}
+    <label
+      htmlFor="nationality-other"
+      className={`block cursor-pointer rounded-2xl border p-4 text-left transition ${
+        formData.nationalityType === "Other"
+          ? "border-cyan-500 bg-cyan-500/10 ring-2 ring-cyan-500/10"
+          : "border-slate-800 bg-black hover:border-slate-600"
+      }`}
+    >
+      <input
+        id="nationality-other"
+        name="nationalityType"
+        type="radio"
+        value="Other"
+        checked={
+          formData.nationalityType === "Other"
+        }
+        onChange={() =>
+          handleNationalityTypeChange("Other")
+        }
+        className="sr-only"
+      />
 
-                    <input
-                      id="nationality"
-                      type="text"
-                      value={
-                        formData.nationality
-                      }
-                      onChange={(event) =>
-                        updateField(
-                          "nationality",
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Enter your nationality"
-                      className="w-full rounded-2xl border border-slate-800 bg-black px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
-                    />
-                  </div>
-                )}
-              </div>
+      <div className="flex items-start gap-3">
+        <div
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+            formData.nationalityType === "Other"
+              ? "border-cyan-400"
+              : "border-slate-600"
+          }`}
+        >
+          {formData.nationalityType === "Other" && (
+            <div className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
+          )}
+        </div>
 
+        <div>
+          <p className="font-bold text-white">
+            Foreign
+          </p>
+
+          <p className="mt-1 text-xs text-slate-500">
+            Passport required
+          </p>
+        </div>
+      </div>
+    </label>
+  </div>
+
+  {/* Foreign nationality */}
+  {formData.nationalityType === "Other" && (
+    <div className="mt-5">
+      <label
+        htmlFor="nationality"
+        className="mb-2 block text-sm font-semibold text-slate-200"
+      >
+        Your Nationality
+        <span className="ml-1 text-red-500">
+          *
+        </span>
+      </label>
+
+      <input
+        id="nationality"
+        name="nationality"
+        type="text"
+        autoComplete="country-name"
+        value={formData.nationality}
+        onChange={(event) =>
+          updateField(
+            "nationality",
+            event.target.value,
+          )
+        }
+        placeholder="Enter your nationality"
+        className="w-full rounded-2xl border border-slate-800 bg-black px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+      />
+    </div>
+  )}
+</div>
               {/* Identification */}
               <div className="border-t border-slate-800 pt-6">
                 <div className="mb-5">
