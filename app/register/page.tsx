@@ -161,8 +161,19 @@ export default function RegisterPage() {
     useState<File | null>(null);
 
   /*
-   * Upload status is only used to show the student
-   * whether each selected file was actually uploaded.
+   * These URLs are populated immediately after
+   * the corresponding file is successfully uploaded.
+   */
+  const [studentPhotoUrl, setStudentPhotoUrl] =
+    useState<string>("");
+
+  const [identityDocumentUrl, setIdentityDocumentUrl] =
+    useState<string>("");
+
+  /*
+   * Upload status is used to show the student
+   * whether each selected file is actually
+   * uploading / uploaded / failed.
    */
   const [studentPhotoUploadStatus, setStudentPhotoUploadStatus] =
     useState<
@@ -176,8 +187,13 @@ export default function RegisterPage() {
 
   const [error, setError] = useState("");
 
+  /*
+   * The registration form should NOT be blocked
+   * while the public registration-status check
+   * is running in the background.
+   */
   const [loadingStatus, setLoadingStatus] =
-    useState(true);
+    useState(false);
 
   const [registrationOpen, setRegistrationOpen] =
     useState(true);
@@ -190,7 +206,14 @@ export default function RegisterPage() {
 
   useEffect(() => {
     async function checkRegistrationStatus() {
-      setLoadingStatus(true);
+      /*
+       * Do not block the registration form while
+       * this public status check is running.
+       *
+       * The final registration RPC remains the
+       * authoritative security check.
+       */
+      setLoadingStatus(false);
 
       const timeoutPromise = new Promise<never>(
         (_, reject) => {
@@ -333,6 +356,7 @@ export default function RegisterPage() {
      * document type changes.
      */
     setIdentityDocument(null);
+    setIdentityDocumentUrl("");
     setIdentityDocumentUploadStatus("idle");
     setError("");
   }
@@ -367,72 +391,6 @@ export default function RegisterPage() {
     }
 
     return true;
-  }
-
-  function handleStudentPhotoChange(
-    event: ChangeEvent<HTMLInputElement>,
-  ) {
-    setError("");
-
-    const file =
-      event.target.files?.[0] ?? null;
-
-    if (!file) {
-      setStudentPhoto(null);
-      setStudentPhotoUploadStatus("idle");
-      return;
-    }
-
-    if (
-      !validateFile(
-        file,
-        "Student photo",
-      )
-    ) {
-      event.target.value = "";
-      setStudentPhoto(null);
-      setStudentPhotoUploadStatus("idle");
-      return;
-    }
-
-    setStudentPhoto(file);
-    setStudentPhotoUploadStatus("idle");
-  }
-
-  function handleIdentityDocumentChange(
-    event: ChangeEvent<HTMLInputElement>,
-  ) {
-    setError("");
-
-    const file =
-      event.target.files?.[0] ?? null;
-
-    if (!file) {
-      setIdentityDocument(null);
-      setIdentityDocumentUploadStatus("idle");
-      return;
-    }
-
-    const documentLabel =
-      formData.nationalityType ===
-      "Egyptian"
-        ? "National ID document"
-        : "Passport document";
-
-    if (
-      !validateFile(
-        file,
-        documentLabel,
-      )
-    ) {
-      event.target.value = "";
-      setIdentityDocument(null);
-      setIdentityDocumentUploadStatus("idle");
-      return;
-    }
-
-    setIdentityDocument(file);
-    setIdentityDocumentUploadStatus("idle");
   }
 
   async function uploadFile(
@@ -542,6 +500,184 @@ export default function RegisterPage() {
     throw new Error(
       `Unable to upload ${file.name}.`,
     );
+  }
+
+  async function handleStudentPhotoChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    setError("");
+
+    const file =
+      event.target.files?.[0] ?? null;
+
+    if (!file) {
+      setStudentPhoto(null);
+      setStudentPhotoUrl("");
+      setStudentPhotoUploadStatus("idle");
+      return;
+    }
+
+    if (
+      !validateFile(
+        file,
+        "Student photo",
+      )
+    ) {
+      event.target.value = "";
+      setStudentPhoto(null);
+      setStudentPhotoUrl("");
+      setStudentPhotoUploadStatus("idle");
+      return;
+    }
+
+    /*
+     * Store the selected file immediately.
+     */
+    setStudentPhoto(file);
+
+    /*
+     * The previous uploaded URL must not be reused.
+     */
+    setStudentPhotoUrl("");
+
+    /*
+     * Start the actual Supabase Storage upload
+     * immediately after the student selects the file.
+     */
+    setStudentPhotoUploadStatus(
+      "uploading",
+    );
+
+    try {
+      const uploadedUrl =
+        await uploadFile(
+          file,
+          "student-photos",
+          "students",
+        );
+
+      /*
+       * Only mark the file as successfully uploaded
+       * after Supabase Storage has returned the public URL.
+       */
+      setStudentPhotoUrl(
+        uploadedUrl,
+      );
+
+      setStudentPhotoUploadStatus(
+        "success",
+      );
+    } catch (uploadError) {
+      console.error(
+        "Student photo upload failed:",
+        uploadError,
+      );
+
+      setStudentPhotoUrl("");
+
+      setStudentPhotoUploadStatus(
+        "error",
+      );
+
+      const message =
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Unable to upload the student photo.";
+
+      setError(message);
+    }
+  }
+
+  async function handleIdentityDocumentChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    setError("");
+
+    const file =
+      event.target.files?.[0] ?? null;
+
+    if (!file) {
+      setIdentityDocument(null);
+      setIdentityDocumentUrl("");
+      setIdentityDocumentUploadStatus("idle");
+      return;
+    }
+
+    const documentLabel =
+      formData.nationalityType ===
+      "Egyptian"
+        ? "National ID document"
+        : "Passport document";
+
+    if (
+      !validateFile(
+        file,
+        documentLabel,
+      )
+    ) {
+      event.target.value = "";
+      setIdentityDocument(null);
+      setIdentityDocumentUrl("");
+      setIdentityDocumentUploadStatus("idle");
+      return;
+    }
+
+    /*
+     * Store the selected file immediately.
+     */
+    setIdentityDocument(file);
+
+    /*
+     * The previous uploaded URL must not be reused.
+     */
+    setIdentityDocumentUrl("");
+
+    /*
+     * Start the actual Supabase Storage upload
+     * immediately after the student selects the file.
+     */
+    setIdentityDocumentUploadStatus(
+      "uploading",
+    );
+
+    try {
+      const uploadedUrl =
+        await uploadFile(
+          file,
+          "identity-documents",
+          "students",
+        );
+
+      /*
+       * Only mark the file as successfully uploaded
+       * after Supabase Storage has returned the public URL.
+       */
+      setIdentityDocumentUrl(
+        uploadedUrl,
+      );
+
+      setIdentityDocumentUploadStatus(
+        "success",
+      );
+    } catch (uploadError) {
+      console.error(
+        "Identity document upload failed:",
+        uploadError,
+      );
+
+      setIdentityDocumentUrl("");
+
+      setIdentityDocumentUploadStatus(
+        "error",
+      );
+
+      const message =
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Unable to upload the required identity document.";
+
+      setError(message);
+    }
   }
 
   async function handleSubmit(
@@ -714,11 +850,41 @@ export default function RegisterPage() {
     }
 
     /*
-     * Student photo.
+     * Student photo must already be uploaded.
      */
     if (!studentPhoto) {
       setError(
         "Please upload your student photo.",
+      );
+
+      return;
+    }
+
+    /*
+     * Do not allow Continue while the student photo
+     * is still uploading.
+     */
+    if (
+      studentPhotoUploadStatus ===
+      "uploading"
+    ) {
+      setError(
+        "Please wait until the student photo finishes uploading.",
+      );
+
+      return;
+    }
+
+    /*
+     * Student photo must have a successful upload URL.
+     */
+    if (
+      studentPhotoUploadStatus !==
+        "success" ||
+      !studentPhotoUrl
+    ) {
+      setError(
+        "Please upload the student photo successfully before continuing.",
       );
 
       return;
@@ -738,65 +904,51 @@ export default function RegisterPage() {
       return;
     }
 
+    /*
+     * Do not allow Continue while the identity
+     * document is still uploading.
+     */
+    if (
+      identityDocumentUploadStatus ===
+      "uploading"
+    ) {
+      setError(
+        nationalityType ===
+        "Egyptian"
+          ? "Please wait until the National ID document finishes uploading."
+          : "Please wait until the Passport document finishes uploading.",
+      );
+
+      return;
+    }
+
+    /*
+     * Identity document must have a successful
+     * upload URL.
+     */
+    if (
+      identityDocumentUploadStatus !==
+        "success" ||
+      !identityDocumentUrl
+    ) {
+      setError(
+        nationalityType ===
+        "Egyptian"
+          ? "Please upload the National ID document successfully before continuing."
+          : "Please upload the Passport document successfully before continuing.",
+      );
+
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       /*
-       * Upload student photo.
+       * The files were already uploaded immediately
+       * when they were selected.
        *
-       * The upload function automatically retries
-       * temporary network / transport failures.
-       */
-      setStudentPhotoUploadStatus(
-        "uploading",
-      );
-
-      const studentPhotoUrl =
-        await uploadFile(
-          studentPhoto,
-          "student-photos",
-          "students",
-        );
-
-      /*
-       * Student photo has now been successfully
-       * uploaded to Supabase Storage.
-       */
-      setStudentPhotoUploadStatus(
-        "success",
-      );
-
-      /*
-       * Upload National ID / Passport.
-       *
-       * This is a separate upload, so if this one
-       * encounters a temporary failure, only this
-       * file is retried.
-       */
-      setIdentityDocumentUploadStatus(
-        "uploading",
-      );
-
-      const identityDocumentUrl =
-        await uploadFile(
-          identityDocument,
-          "identity-documents",
-          "students",
-        );
-
-      /*
-       * Identity document has now been successfully
-       * uploaded to Supabase Storage.
-       */
-      setIdentityDocumentUploadStatus(
-        "success",
-      );
-
-      /*
-       * Store the complete form temporarily.
-       *
-       * Final registration is created later on
-       * the Confirmation page through the secure RPC.
+       * We only store their successful URLs here.
        */
       sessionStorage.setItem(
         "internship_student_data",
@@ -834,6 +986,10 @@ export default function RegisterPage() {
 
           batch,
 
+          /*
+           * These URLs already point to files
+           * uploaded successfully to Supabase Storage.
+           */
           studentPhotoUrl,
 
           identityDocumentUrl,
@@ -845,40 +1001,16 @@ export default function RegisterPage() {
        */
       window.location.href =
         "/register/select-group";
-    } catch (uploadError) {
+    } catch (storageError) {
       console.error(
-        uploadError,
+        "Unable to save student data:",
+        storageError,
       );
 
-      /*
-       * Show the correct upload state if one
-       * of the uploads fails.
-       */
-      if (
-        studentPhotoUploadStatus ===
-        "uploading"
-      ) {
-        setStudentPhotoUploadStatus(
-          "error",
-        );
-      }
+      setError(
+        "Unable to continue. Please try again.",
+      );
 
-      if (
-        identityDocumentUploadStatus ===
-        "uploading"
-      ) {
-        setIdentityDocumentUploadStatus(
-          "error",
-        );
-      }
-
-      const message =
-        uploadError instanceof Error
-          ? uploadError.message
-          : "Unable to upload the required documents.";
-
-      setError(message);
-    } finally {
       setSubmitting(false);
     }
   }
@@ -922,26 +1054,6 @@ export default function RegisterPage() {
             <ArrowLeft size={18} />
             Back to Home
           </Link>
-        </div>
-      </main>
-    );
-  }
-
-  /*
-   * Loading registration status.
-   */
-  if (loadingStatus) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
-        <div className="text-center">
-          <Loader2
-            size={34}
-            className="mx-auto animate-spin text-cyan-400"
-          />
-
-          <p className="mt-4 text-sm text-slate-300">
-            Checking registration status...
-          </p>
         </div>
       </main>
     );
@@ -1406,7 +1518,7 @@ export default function RegisterPage() {
                         )
                       }
                       placeholder="Enter Passport Number"
-                      className="w-full rounded-2xl border border-slate-800 bg-black px-4 py-3.5 text-sm uppercase text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
+                      className="w-full rounded-2xl border border-slate-800 bg-black px-4 py-3.5 text-sm uppercase text-white outline-none placeholder:text-slate-600 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10"
                     />
                   </div>
                 )}
@@ -1639,7 +1751,7 @@ export default function RegisterPage() {
                         className="animate-spin"
                       />
 
-                      Uploading...
+                      Continuing...
                     </>
                   ) : (
                     <>
