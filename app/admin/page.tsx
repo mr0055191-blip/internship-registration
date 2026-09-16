@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -866,13 +867,15 @@ export default function AdminPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={loadAdminData}
-              disabled={loadingData}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm font-medium transition hover:border-cyan-500 disabled:opacity-50"
+            <Link
+              href="/admin/diagnostics"
+              className="flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-sm font-medium text-violet-300 transition hover:bg-violet-500/20"
             >
-                        <button
+              <ShieldCheck className="h-4 w-4" />
+              Registration Diagnostics
+            </Link>
+
+            <button
               type="button"
               onClick={handleExportExcel}
               disabled={registrations.length === 0}
@@ -880,7 +883,14 @@ export default function AdminPage() {
             >
               <FileText className="h-4 w-4" />
               Export Excel
-            </button>  
+            </button>
+
+            <button
+              type="button"
+              onClick={loadAdminData}
+              disabled={loadingData}
+              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm font-medium transition hover:border-cyan-500 disabled:opacity-50"
+            >
               <RefreshCw
                 className={`h-4 w-4 ${
                   loadingData ? "animate-spin" : ""

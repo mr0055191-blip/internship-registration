@@ -100,6 +100,100 @@ function wait(milliseconds: number) {
  * Validation, RLS, file-size, and other permanent
  * errors are NOT retried.
  */
+
+function createDiagnosticRequestId() {
+  if (
+    typeof crypto !== "undefined" &&
+    "randomUUID" in crypto
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
+
+function getBrowserName() {
+  if (typeof navigator === "undefined") {
+    return "unknown";
+  }
+
+  const userAgent = navigator.userAgent;
+
+  if (/Edg\//i.test(userAgent)) return "Edge";
+  if (/OPR\//i.test(userAgent)) return "Opera";
+  if (/Chrome\//i.test(userAgent)) return "Chrome";
+  if (/CriOS\//i.test(userAgent)) return "Chrome iOS";
+  if (/Firefox\//i.test(userAgent)) return "Firefox";
+  if (/FxiOS\//i.test(userAgent)) return "Firefox iOS";
+  if (/Safari\//i.test(userAgent)) return "Safari";
+
+  return "Other";
+}
+
+function getDeviceType() {
+  if (typeof navigator === "undefined") {
+    return "unknown";
+  }
+
+  const userAgent = navigator.userAgent;
+
+  if (/iPad|Tablet|Android(?!.*Mobile)/i.test(userAgent)) {
+    return "tablet";
+  }
+
+  if (/Mobile|iPhone|iPod|Android/i.test(userAgent)) {
+    return "mobile";
+  }
+
+  return "desktop";
+}
+
+async function logRegistrationEvent({
+  studentCode,
+  step,
+  status,
+  errorMessage,
+  requestId,
+}: {
+  studentCode?: string | null;
+  step: string;
+  status: "started" | "success" | "error";
+  errorMessage?: string | null;
+  requestId?: string | null;
+}) {
+  try {
+    const { error: logError } =
+      await supabase.rpc(
+        "log_intern_registration_event",
+        {
+          p_student_code:
+            studentCode?.trim() || null,
+          p_step: step,
+          p_status: status,
+          p_error_message:
+            errorMessage?.slice(0, 500) || null,
+          p_request_id: requestId || null,
+          p_browser: getBrowserName(),
+          p_device: getDeviceType(),
+        },
+      );
+
+    if (logError) {
+      console.warn(
+        "Registration diagnostic log failed:",
+        logError,
+      );
+    }
+  } catch (loggingError) {
+    console.warn(
+      "Registration diagnostic logging failed:",
+      loggingError,
+    );
+  }
+}
+
 function isRetryableUploadError(
   message: string,
 ) {
@@ -204,8 +298,22 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] =
     useState(false);
 
+  const [diagnosticRequestId] =
+    useState(createDiagnosticRequestId);
+
   useEffect(() => {
+    void logRegistrationEvent({
+      step: "register_page_opened",
+      status: "success",
+      requestId: diagnosticRequestId,
+    });
+
     async function checkRegistrationStatus() {
+      void logRegistrationEvent({
+        step: "registration_status_check",
+        status: "started",
+        requestId: diagnosticRequestId,
+      });
       /*
        * Do not block the registration form while
        * this public status check is running.
@@ -239,6 +347,13 @@ export default function RegisterPage() {
         if (statusError) {
           console.error(statusError);
 
+          void logRegistrationEvent({
+            step: "registration_status_check",
+            status: "error",
+            errorMessage: statusError.message,
+            requestId: diagnosticRequestId,
+          });
+
           /*
            * If the status check fails, the page remains
            * usable. The final registration RPC performs
@@ -262,12 +377,28 @@ export default function RegisterPage() {
           statusRow?.registration_closes_at ?? null,
         );
 
+        void logRegistrationEvent({
+          step: "registration_status_check",
+          status: "success",
+          requestId: diagnosticRequestId,
+        });
+
         setLoadingStatus(false);
       } catch (statusCheckError) {
         console.error(
           "Registration status check failed:",
           statusCheckError,
         );
+
+        void logRegistrationEvent({
+          step: "registration_status_check",
+          status: "error",
+          errorMessage:
+            statusCheckError instanceof Error
+              ? statusCheckError.message
+              : "Registration status check failed.",
+          requestId: diagnosticRequestId,
+        });
 
         /*
          * If Supabase does not respond within 8 seconds,
@@ -397,7 +528,17 @@ export default function RegisterPage() {
     file: File,
     bucket: string,
     folder: string,
+    studentCode?: string,
+    diagnosticStep?: string,
   ) {
+    if (diagnosticStep) {
+      void logRegistrationEvent({
+        studentCode,
+        step: diagnosticStep,
+        status: "started",
+        requestId: diagnosticRequestId,
+      });
+    }
     const extension =
       file.name
         .split(".")
@@ -460,6 +601,15 @@ export default function RegisterPage() {
           );
         }
 
+        if (diagnosticStep) {
+          void logRegistrationEvent({
+            studentCode,
+            step: diagnosticStep,
+            status: "success",
+            requestId: diagnosticRequestId,
+          });
+        }
+
         return data.publicUrl;
       } catch (uploadError) {
         const message =
@@ -475,6 +625,16 @@ export default function RegisterPage() {
           );
 
         if (!canRetry) {
+          if (diagnosticStep) {
+            void logRegistrationEvent({
+              studentCode,
+              step: diagnosticStep,
+              status: "error",
+              errorMessage: message,
+              requestId: diagnosticRequestId,
+            });
+          }
+
           throw new Error(message);
         }
 
@@ -554,6 +714,8 @@ export default function RegisterPage() {
           file,
           "student-photos",
           "students",
+          formData.studentCode,
+          "student_photo_upload",
         );
 
       /*
@@ -572,6 +734,17 @@ export default function RegisterPage() {
         "Student photo upload failed:",
         uploadError,
       );
+
+      void logRegistrationEvent({
+        studentCode: formData.studentCode,
+        step: "student_photo_upload_handler",
+        status: "error",
+        errorMessage:
+          uploadError instanceof Error
+            ? uploadError.message
+            : "Student photo upload failed.",
+        requestId: diagnosticRequestId,
+      });
 
       setStudentPhotoUrl("");
 
@@ -646,6 +819,8 @@ export default function RegisterPage() {
           file,
           "identity-documents",
           "students",
+          formData.studentCode,
+          "identity_document_upload",
         );
 
       /*
@@ -664,6 +839,17 @@ export default function RegisterPage() {
         "Identity document upload failed:",
         uploadError,
       );
+
+      void logRegistrationEvent({
+        studentCode: formData.studentCode,
+        step: "identity_document_upload_handler",
+        status: "error",
+        errorMessage:
+          uploadError instanceof Error
+            ? uploadError.message
+            : "Identity document upload failed.",
+        requestId: diagnosticRequestId,
+      });
 
       setIdentityDocumentUrl("");
 
@@ -943,6 +1129,13 @@ export default function RegisterPage() {
 
     setSubmitting(true);
 
+    void logRegistrationEvent({
+      studentCode,
+      step: "continue_button_submitted",
+      status: "started",
+      requestId: diagnosticRequestId,
+    });
+
     try {
       /*
        * The files were already uploaded immediately
@@ -999,6 +1192,13 @@ export default function RegisterPage() {
       /*
        * Continue to Bundle / Group selection.
        */
+      void logRegistrationEvent({
+        studentCode,
+        step: "continue_to_group_selection",
+        status: "success",
+        requestId: diagnosticRequestId,
+      });
+
       window.location.href =
         "/register/select-group";
     } catch (storageError) {
@@ -1006,6 +1206,17 @@ export default function RegisterPage() {
         "Unable to save student data:",
         storageError,
       );
+
+      void logRegistrationEvent({
+        studentCode,
+        step: "continue_to_group_selection",
+        status: "error",
+        errorMessage:
+          storageError instanceof Error
+            ? storageError.message
+            : "Unable to save student data.",
+        requestId: diagnosticRequestId,
+      });
 
       setError(
         "Unable to continue. Please try again.",
